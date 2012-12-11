@@ -23,8 +23,8 @@ public class PKCS5 implements CryptoPad {
     }
 
     public byte[] unPad(byte[] message) {
-        int padding = (int)message[message.length - 1] + 256;
-        System.out.println(padding);
+        int padding = (int)message[message.length - 1] & 0xFF;
+        System.out.println("Pad is " + padding + " bytes long");
         int length = message.length - padding;
         byte[] result = new byte[length];
         System.arraycopy(message, 0, result, 0, length);

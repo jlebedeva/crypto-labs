@@ -1,9 +1,9 @@
 
 package main;
 
+import java.nio.charset.Charset;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
-import java.util.Arrays;
 import javax.crypto.BadPaddingException;
 import javax.crypto.IllegalBlockSizeException;
 import javax.crypto.NoSuchPaddingException;
@@ -11,7 +11,6 @@ import javax.xml.bind.DatatypeConverter;
 import modes.CBC;
 import modes.CTR;
 import modes.CryptoMode;
-import padding.CryptoPad;
 import padding.PKCS5;
 
 /**
