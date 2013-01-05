@@ -5,9 +5,17 @@
 package week5;
 
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Properties;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 /**
  * Programming Assignment Week 5
@@ -44,27 +52,69 @@ import java.util.Properties;
  * x1(3)=9412394884692981603806680440403102015154978075456925615997659385849607264684414990414637267232961588893041660817569274188696136246050970099061095323101258
  * x0(3)=7565599653190319053467818354668782984230096884918571310099042116774227208796185303200868402606980112854220217466838985482961089857423369985182034226789451
  */
-public class Main {
+public class TableBuilder implements Callable<HashMap<BigInteger, Integer>> {
+    
+    private int start;
+    private int length;
     
     private static BigInteger p;
     private static BigInteger g;
     private static BigInteger h;
     private static final BigInteger B = BigInteger.valueOf(2).pow(20);
-    private static HashMap<BigInteger, Integer> leftTable = new HashMap<>();
+    private static final int threads = 8; // number of threads, divisible by 2
+    
+    private TableBuilder(int start, int length) {
+        this.start = start;
+        this.length = length;
+    }
+    
+    @Override
+    public HashMap<BigInteger, Integer> call() throws Exception {
+        return buildLeftChunk();
+    }
+    
+    private HashMap<BigInteger, Integer> buildLeftChunk() {
+        HashMap<BigInteger, Integer> chunk = new HashMap<>();
+        BigInteger currentValue = g.modPow(BigInteger.valueOf(start), p);
+        for (int i = start; i < (start + length); i++) {
+            if (i != start) {
+                currentValue = currentValue.multiply(g).mod(p);
+            }
+            if (i == 3) {
+                System.out.println("x1(3) = " + h.multiply(currentValue.modInverse(p)).mod(p));
+            }
+            chunk.put(h.multiply(currentValue.modInverse(p)).mod(p), i);
+        }
+        return chunk;
+    }
     
     public static void main(String[] args) throws IOException {
+        long totalStartTime = System.currentTimeMillis();
+        long startTime = totalStartTime;
         getInput();
-        buildLeftTable();
-        BigInteger[] result = computeRigthTable();
+        long finishTime = System.currentTimeMillis() - startTime;
+        System.out.println("1. Input loaded (" + finishTime + "ms)");
+
+        startTime = System.currentTimeMillis();
+        HashMap<BigInteger, Integer> leftTable = buildLeftTable();
+        finishTime = System.currentTimeMillis() - startTime;
+        System.out.println("2. Left-side table built (" + finishTime + "ms)");
+        
+        startTime = System.currentTimeMillis();        
+        BigInteger[] result = findCollision(leftTable);
+        finishTime = System.currentTimeMillis() - startTime;
+        System.out.println("3. Right-side computation finished (" + finishTime + "ms)");
         if (result != null) {
             System.out.println("x0 (right table) = " + result[0]);
             System.out.println("x1 (left table) = " + result[1]);
             BigInteger answer = B.multiply(result[0]).add(result[1]).mod(p);
-            System.out.println("Answer = " + answer);
+            System.out.println("x = " + answer);
             System.out.println("Check it: g^x = h mod p (" + g.modPow(answer, p).equals(h) + ")");
         } else {
-            System.out.println("Answer not found");
+            System.out.println("x not found");
         }
+        long totalTime = (System.currentTimeMillis() - totalStartTime) / 1000;
+        System.out.println("Total time: " + totalTime + " seconds");
     }
     
     private static void getInput() throws IOException {
@@ -80,27 +130,39 @@ public class Main {
                     break;
             }
         }
-        System.out.println("Input loaded!");
         System.out.println("p = " + p);
         System.out.println("g = " + g);
         System.out.println("h = " + h);
     }
-    
-    private static void buildLeftTable() {
-        BigInteger currentValue = BigInteger.valueOf(1);
-        for (int i = 0; i < B.longValue(); i++) {
-            if (i != 0) {
-                currentValue = currentValue.multiply(g).mod(p);
+
+    public static HashMap<BigInteger, Integer> buildLeftTable() {
+        HashMap<BigInteger, Integer> leftTable = new HashMap<>();
+        try {
+            int chunkSize = B.intValue() / threads;
+            int chunkNumber = 0;
+            List<TableBuilder> tasks = new ArrayList<>();
+            for (int i = 0; i < threads; i++) {
+                tasks.add(new TableBuilder(chunkSize * chunkNumber, chunkSize));
+                chunkNumber++;
             }
-            if (i == 3) {
-                System.out.println("x1(3) = " + h.multiply(currentValue.modInverse(p)).mod(p));
+            ExecutorService executor = Executors.newFixedThreadPool(threads);
+            List<Future<HashMap<BigInteger, Integer>>> results = executor.invokeAll(tasks);
+            executor.shutdown();
+
+            for (Future<HashMap<BigInteger, Integer>> result : results) {
+                try {
+                    leftTable.putAll(result.get());
+                } catch (ExecutionException ex) {
+                    ex.printStackTrace();
+                }
             }
-            leftTable.put(h.multiply(currentValue.modInverse(p)).mod(p), i);
+        } catch (InterruptedException ex) {
+            ex.printStackTrace();
         }
-        System.out.println("Left table built!");
+        return leftTable;
     }
-    
-    private static BigInteger[] computeRigthTable() {
+
+    private static BigInteger[] findCollision(HashMap<BigInteger, Integer> leftTable) {
         BigInteger base = g.modPow(B, p);
         BigInteger currentValue = BigInteger.valueOf(1);
         for (int i = 0; i < B.longValue(); i++) {
@@ -111,6 +173,8 @@ public class Main {
                 System.out.println("x0(3) = " + currentValue);
             }
             if (leftTable.containsKey(currentValue)) {
+                int percent = (i * 100) / B.intValue();
+                System.out.println("Collision after " + percent + "%");
                 return new BigInteger[] {BigInteger.valueOf(i), BigInteger.valueOf(leftTable.get(currentValue))};
             }
         }
