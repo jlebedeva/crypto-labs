@@ -40,9 +40,12 @@ import java.util.Properties;
  * overall work is about 2^20 multiplications to build the table and another 2^20
  * lookups in this table.
  *
+ * To test:
+ * x1(3)=9412394884692981603806680440403102015154978075456925615997659385849607264684414990414637267232961588893041660817569274188696136246050970099061095323101258
+ * x0(3)=7565599653190319053467818354668782984230096884918571310099042116774227208796185303200868402606980112854220217466838985482961089857423369985182034226789451
  */
 public class Main {
-
+    
     private static BigInteger p;
     private static BigInteger g;
     private static BigInteger h;
@@ -58,6 +61,7 @@ public class Main {
             System.out.println("x1 (left table) = " + result[1]);
             BigInteger answer = B.multiply(result[0]).add(result[1]).mod(p);
             System.out.println("Answer = " + answer);
+            System.out.println("Check it: g^x = h mod p (" + g.modPow(answer, p).equals(h) + ")");
         } else {
             System.out.println("Answer not found");
         }
@@ -84,9 +88,12 @@ public class Main {
     
     private static void buildLeftTable() {
         BigInteger currentValue = BigInteger.valueOf(1);
-        for (int i = 0; i <= B.longValue(); i++) {
+        for (int i = 0; i < B.longValue(); i++) {
             if (i != 0) {
                 currentValue = currentValue.multiply(g).mod(p);
+            }
+            if (i == 3) {
+                System.out.println("x1(3) = " + h.multiply(currentValue.modInverse(p)).mod(p));
             }
             leftTable.put(h.multiply(currentValue.modInverse(p)).mod(p), i);
         }
@@ -94,10 +101,14 @@ public class Main {
     }
     
     private static BigInteger[] computeRigthTable() {
-        BigInteger currentValue = g.modPow(B, p);
-        for (int i = 0; i <= B.longValue(); i++) {
+        BigInteger base = g.modPow(B, p);
+        BigInteger currentValue = BigInteger.valueOf(1);
+        for (int i = 0; i < B.longValue(); i++) {
             if (i != 0) {
-                currentValue = currentValue.multiply(g).mod(p);
+                currentValue = currentValue.multiply(base).mod(p);
+            }
+            if (i == 3) {
+                System.out.println("x0(3) = " + currentValue);
             }
             if (leftTable.containsKey(currentValue)) {
                 return new BigInteger[] {BigInteger.valueOf(i), BigInteger.valueOf(leftTable.get(currentValue))};
